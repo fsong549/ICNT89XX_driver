@@ -1174,11 +1174,11 @@ int cts_wakeup_device(struct cts_device *cts_dev)
     struct cts_platform_data *pdata = cts_dev->pdata;
     int ret=0;
     u8 prog_i2c_addr;
-    //u8 wakeup_cmd[2] = {0x04, 0xFF};
+    u8 wakeup_cmd[2] = {0x04, 0xFF};
 
     cts_plat_reset_device(pdata);
     
-    #if 0 // used for i2c wakeup
+    #if 1 // used for i2c wakeup
     ret = cts_plat_i2c_write(pdata, CTS_NORMAL_MODE_I2CADDR, wakeup_cmd, sizeof(wakeup_cmd), 5, 2);
     if (ret) {
         cts_err("send i2c wakeup cmd fail");

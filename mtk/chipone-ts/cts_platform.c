@@ -261,11 +261,12 @@ int cts_init_platform_data(struct cts_platform_data *pdata,
         cts_err("Parse irq in dts failed");
         return -ENODEV;
     }
+    cts_info("CTP irq:%d\n", pdata->irq);
     pdata->i2c_client->irq = pdata->irq;
     spin_lock_init(&pdata->irq_lock);
 
 #ifdef CONFIG_CTS_VIRTUALKEY
-    pdata->vkey_num = tpd_dts_data.tpd_keycnt;
+    pdata->vkey_num = tpd_dts_data.tpd_key_num;
 #endif /* CONFIG_CTS_VIRTUALKEY */
 
 #ifdef CONFIG_CTS_GESTURE
@@ -415,7 +416,7 @@ int cts_plat_reset_device(struct cts_platform_data *pdata)
 
 #ifdef CFG_CTS_HAS_RESET_PIN
     tpd_gpio_output(tpd_rst_gpio_index, 0);
-    mdelay(1);
+    mdelay(50);
     tpd_gpio_output(tpd_rst_gpio_index, 1);
     mdelay(50);
 #endif /* CFG_CTS_HAS_RESET_PIN */
@@ -637,6 +638,8 @@ int cts_plat_process_vkey(struct cts_platform_data *pdata, u8 vkey_state)
 
     for (i = 0; i < pdata->vkey_num; i++) {
         if (event & BIT(i)) {
+	    x = tpd_dts_data.tpd_key_dim_local[i].key_x;
+	    y = tpd_dts_data.tpd_key_dim_local[i].key_y;
             tpd_button(x, y, vkey_state & BIT(i));
 
             /* MTK fobidon more than one key pressed in the same time */
@@ -651,12 +654,14 @@ int cts_plat_process_vkey(struct cts_platform_data *pdata, u8 vkey_state)
 
 int cts_plat_release_all_vkey(struct cts_platform_data *pdata)
 {
-    int i;
+    int x, y, i;
 
     cts_info("Release all vkeys");
 
     for (i = 0; i < pdata->vkey_num; i++) {
         if (pdata->vkey_state & BIT(i)) {
+	    x = tpd_dts_data.tpd_key_dim_local[i].key_x;
+	    y = tpd_dts_data.tpd_key_dim_local[i].key_y;
             tpd_button(x, y, 0);
         }
     }
