@@ -25,7 +25,7 @@ int cts_plat_i2c_write(struct cts_platform_data *pdata, u8 i2c_addr,
         .addr    = i2c_addr,
         .buf    = (u8 *)src,
         .len    = len,
-        .scl_rate   = 200000
+       // .scl_rate   = 200000
     };
 
     do {
@@ -59,14 +59,14 @@ int cts_plat_i2c_read(struct cts_platform_data *pdata, u8 i2c_addr,
             .flags    = 0,
             .buf    = (u8 *)wbuf,
             .len    = wlen,
-            .scl_rate   = 200000
+            //.scl_rate   = 200000
         },
         {
             .addr    = i2c_addr,
             .flags    = I2C_M_RD,
             .buf    = (u8 *)rbuf,
             .len    = rlen,
-            .scl_rate   = 200000
+          //  .scl_rate   = 200000
         }
     };
 
