@@ -32,6 +32,16 @@ static struct cts_device_hwdata cts_device_hwdatas[] = {
         .ver_offset = 0x100,
     },
     {
+        .name = "ICNT88xx",
+        .hwid = CTS_HWID_ICNT88XX,
+        .fwid = CTS_FWID_ICNT88XX,
+        .num_row = 42,
+        .num_col = 30,
+        .sram_size = 45 * 1024,
+        .program_addr_width = 3,
+        .ver_offset = 0x100,
+    },
+    {
         .name = "ICNT87xx",
         .hwid = CTS_HWID_ICNT87XX,
         .fwid = CTS_FWID_ICNT87XX,
@@ -719,7 +729,8 @@ init_ic_type:
     }else if(strcmp(cts_dev->hwdata->name, "ICNT82xx") == 0){
 //
     }else if((strcmp(cts_dev->hwdata->name, "ICNT85xx") == 0)
-        ||(strcmp(cts_dev->hwdata->name, "ICNT86xx") == 0)){
+        ||(strcmp(cts_dev->hwdata->name, "ICNT86xx") == 0)
+        ||(strcmp(cts_dev->hwdata->name, "ICNT88xx") == 0)){
         flash_id = icn85xx_read_flashid(cts_dev);
 //
     }else if(strcmp(cts_dev->hwdata->name, "ICNT89xx") == 0){
@@ -996,7 +1007,7 @@ int cts_get_diffdata(const struct cts_device *cts_dev, void *buf)
 	
     cts_info("Get diff data");
     if(strcmp(cts_dev->hwdata->name, "ICNT89xx") == 0){
-	is_diff_89xx = 1;
+		//is_diff_89xx = 1;
     }
     return cts_get_scan_data(cts_dev,
             CTS_DEVICE_FW_REG_DIFF_DATA + (cts_dev->hwdata->num_col + 2 + 1) * 2,
@@ -1174,11 +1185,11 @@ int cts_wakeup_device(struct cts_device *cts_dev)
     struct cts_platform_data *pdata = cts_dev->pdata;
     int ret=0;
     u8 prog_i2c_addr;
-    u8 wakeup_cmd[2] = {0x04, 0xFF};
+    //u8 wakeup_cmd[2] = {0x04, 0xFF};
 
     cts_plat_reset_device(pdata);
     
-    #if 1 // used for i2c wakeup
+    #if 0 // used for i2c wakeup
     ret = cts_plat_i2c_write(pdata, CTS_NORMAL_MODE_I2CADDR, wakeup_cmd, sizeof(wakeup_cmd), 5, 2);
     if (ret) {
         cts_err("send i2c wakeup cmd fail");
@@ -1384,7 +1395,8 @@ int cts_enter_normal_mode(struct cts_device *cts_dev)
     else if(strcmp(cts_dev->hwdata->name, "ICNT82xx") == 0){
         //
     }else if((strcmp(cts_dev->hwdata->name, "ICNT85xx") == 0)
-        ||(strcmp(cts_dev->hwdata->name, "ICNT86xx") == 0)){
+        ||(strcmp(cts_dev->hwdata->name, "ICNT86xx") == 0)
+        ||(strcmp(cts_dev->hwdata->name, "ICNT88xx") == 0)){
         ret = cts_hw_reg_writeb_retry(cts_dev, 0x40400, 0x03, 5, 5);//boot from sram
         
     }else if(strcmp(cts_dev->hwdata->name, "ICNT89xx") == 0){
@@ -1407,11 +1419,14 @@ int cts_enter_normal_mode(struct cts_device *cts_dev)
         goto err_init_i2c_normal_mode;
     }
 
+#if 0
     ret = cts_init_fwdata(cts_dev);
     if (ret) {
         cts_err("Device init firmware data failed %d", ret);
         return ret;
     }
+#endif
+
 #ifdef SUPPORT_SENSOR_ID
     ret = cts_get_sensor_id_info(cts_dev);
     if (ret) {
@@ -1729,6 +1744,9 @@ int cts_get_sensor_id_info(struct cts_device *cts_dev)
 
 #endif
 
+struct timeval start_tv;
+struct timeval end_tv;
+
 int cts_probe_device(struct cts_device *cts_dev)
 {
     int  ret, retries = 0;
@@ -1801,6 +1819,9 @@ update_firmware:
     if (firmware) {
         cts_info("firmware->name:%s,",firmware->name);
 
+		do_gettimeofday(&start_tv);
+        //cts_info("update start time>>>>>>>>>>>>> %ldS.%4ldms",start_tv.tv_sec,start_tv.tv_usec/1000);
+
         ++retries;
         ret = cts_update_firmware(cts_dev, firmware, true);
         if (ret) {
@@ -1815,6 +1836,9 @@ update_firmware:
             }
         } 
         else {
+  	    	do_gettimeofday(&end_tv);
+            //cts_info("update end time<<<<<<<<<<< %ldS.%4ldms",end_tv.tv_sec,end_tv.tv_usec/1000);
+            cts_info(">>>>>> update usage time = %4ldms <<<<<<",end_tv.tv_sec*1000+end_tv.tv_usec/1000-start_tv.tv_sec*1000-start_tv.tv_usec/1000);
             cts_release_firmware(firmware);
         }
     } else {

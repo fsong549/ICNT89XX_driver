@@ -2,6 +2,9 @@
 #define CTS_PLAT_QCOM_CONFIG_H
 
 #define CONFIG_CTS_PM_FB_NOTIFIER
+#ifdef CONFIG_DRM_MSM
+#define CFG_CTS_DRM_NOTIFIER
+#endif/*CONFIG_DRM_MSM*/
 
 #if !defined(CONFIG_CTS_PM_FB_NOTIFIER)
 #if defined(CONFIG_PM_SLEEP) && defined(CONFIG_PM_SUSPEND)

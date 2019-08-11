@@ -95,26 +95,63 @@ static int cts_resume(struct chipone_ts_data *cts_data)
 }
 
 #ifdef CONFIG_CTS_PM_FB_NOTIFIER
+#ifdef CFG_CTS_DRM_NOTIFIER
 static int fb_notifier_callback(struct notifier_block *nb,
-        unsigned long action, void *data)
+				      unsigned long action, void *data)
 {
+    volatile int blank;
     const struct cts_platform_data *pdata = 
         container_of(nb, struct cts_platform_data, fb_notifier);
     struct chipone_ts_data *cts_data =
         container_of(pdata->cts_dev, struct chipone_ts_data, cts_dev);
-    struct fb_event *evdata = data;
+	struct fb_event *evdata = data;
 
     cts_info("FB notifier callback");
 
     if (evdata && evdata->data) {
-        int blank = *(int *)evdata->data;
+        if (action == MSM_DRM_EVENT_BLANK) {
+            blank = *(int *)evdata->data;
+            if (blank == MSM_DRM_BLANK_UNBLANK) {	
+                cts_resume(cts_data);
+                return NOTIFY_OK;
+            }    
+        } else if (action == MSM_DRM_EARLY_EVENT_BLANK) {
+            blank = *(int *)evdata->data;
+            if (blank == MSM_DRM_BLANK_POWERDOWN) {	
+                cts_suspend(cts_data);
+                return NOTIFY_OK;
+            }    
+        }
+    }
 
-        if (action == FB_EVENT_BLANK && blank == FB_BLANK_UNBLANK) {
-            cts_resume(cts_data);
-            return NOTIFY_OK;
-        } else if (action == FB_EARLY_EVENT_BLANK && blank == FB_BLANK_POWERDOWN) {
-            cts_suspend(cts_data);
-            return NOTIFY_OK;
+    return NOTIFY_DONE;
+}
+#else
+static int fb_notifier_callback(struct notifier_block *nb,
+				      unsigned long action, void *data)
+{
+    volatile int blank;
+    const struct cts_platform_data *pdata = 
+        container_of(nb, struct cts_platform_data, fb_notifier);
+    struct chipone_ts_data *cts_data =
+        container_of(pdata->cts_dev, struct chipone_ts_data, cts_dev);
+	struct fb_event *evdata = data;
+
+    cts_info("FB notifier callback");
+
+    if (evdata && evdata->data) {
+        if (action == FB_EVENT_BLANK) {
+            blank = *(int *)evdata->data;
+            if (blank == FB_BLANK_UNBLANK) {	
+                cts_resume(cts_data);
+                return NOTIFY_OK;
+            }    
+        } else if (action == FB_EARLY_EVENT_BLANK) {
+            blank = *(int *)evdata->data;
+            if (blank == FB_BLANK_POWERDOWN) {	
+                cts_suspend(cts_data);
+                return NOTIFY_OK;
+            }    
         }
     }
 
@@ -127,14 +164,22 @@ static int cts_init_pm_fb_notifier(struct chipone_ts_data * cts_data)
 
     cts_data->pdata->fb_notifier.notifier_call = fb_notifier_callback;
 
+#ifdef CFG_CTS_DRM_NOTIFIER
+    return msm_drm_register_client(&cts_data->pdata->fb_notifier);
+#else    
     return fb_register_client(&cts_data->pdata->fb_notifier);
+#endif
 }
 
 static int cts_deinit_pm_fb_notifier(struct chipone_ts_data * cts_data)
 {
     cts_info("Deinit FB notifier");
 
+#ifdef CFG_CTS_DRM_NOTIFIER
+    return msm_drm_unregister_client(&cts_data->pdata->fb_notifier)
+#else
     return fb_unregister_client(&cts_data->pdata->fb_notifier); 
+#endif
 }
 
 #endif /* CONFIG_CTS_PM_FB_NOTIFIER */
@@ -145,8 +190,10 @@ static int cts_i2c_driver_probe(struct i2c_client *client,
     struct chipone_ts_data *cts_data = NULL;
     int ret = 0;
 
-    cts_info("Probe i2c client: name='%s' addr=0x%02x flags=0x%02x irq=%d",
-        client->name, client->addr, client->flags, client->irq);
+	cts_info("Driver for ROCKCHIP platform %s",CFG_CTS_DRIVER_VERSION);
+	
+	cts_info("Probe i2c client: name='%s' addr=0x%02x flags=0x%02x irq=%d",
+			client->name, client->addr, client->flags, client->irq);
 
 #if !defined(CONFIG_MTK_PLATFORM)
     if (client->addr != CTS_NORMAL_MODE_I2CADDR) {
@@ -267,8 +314,8 @@ err_register_fb:
 #ifdef CONFIG_CTS_PM_FB_NOTIFIER
     cts_deinit_pm_fb_notifier(cts_data);
 #endif /* CONFIG_CTS_PM_FB_NOTIFIER */
-err_deinit_sysfs:
-    cts_sysfs_remove_device(&client->dev);
+//err_deinit_sysfs:
+	cts_sysfs_remove_device(&client->dev);
 #ifdef CONFIG_CTS_LEGACY_TOOL
     cts_tool_deinit(cts_data);
 #endif /* CONFIG_CTS_LEGACY_TOOL */

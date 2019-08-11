@@ -39,10 +39,18 @@
 
 #include <linux/fb.h>
 #include <linux/notifier.h>
+#include <linux/time.h>
+#include <linux/sched.h>
+
+#ifdef CFG_CTS_DRM_NOTIFIER
+#include <linux/msm_drm_notify.h>
+#endif
 
 #include "cts_config.h"
 
 extern bool cts_show_debug_log;
+extern struct timeval start_tv;
+extern struct timeval end_tv;
 
 #ifndef LOG_TAG
 #define LOG_TAG         ""
@@ -98,6 +106,10 @@ struct cts_platform_data {
     u8  gesture_keymap[CFG_CTS_NUM_GESTURE][2];
     bool irq_wake_enabled;
 #endif /* CONFIG_CTS_GESTURE */
+
+#ifdef CFG_CTS_FORCE_UP
+	struct timer_list touch_event_timeout_timer;
+#endif
 
 #ifdef CONFIG_CTS_PM_FB_NOTIFIER
     struct notifier_block fb_notifier;

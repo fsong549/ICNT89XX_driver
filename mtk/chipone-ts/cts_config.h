@@ -4,12 +4,14 @@
 /** Driver version */
 #define CFG_CTS_DRIVER_MAJOR_VERSION        1
 #define CFG_CTS_DRIVER_MINOR_VERSION        0
-#define CFG_CTS_DRIVER_PATCH_VERSION        0
+#define CFG_CTS_DRIVER_PATCH_VERSION        1
 
-#define CFG_CTS_DRIVER_VERSION              "v1.0.0"
+#define CFG_CTS_DRIVER_VERSION              "v1.0.1"
 
 /** Whether reset pin is used */
 #define CFG_CTS_HAS_RESET_PIN
+
+#define CFG_CTS_FORCE_UP
 
 /** Whether force download firmware to chip */
 //#define CFG_CTS_FIRMWARE_FORCE_UPDATE
@@ -35,7 +37,7 @@
 #define CFG_CTS_MAX_TOUCH_NUM               (5)
 
 /* Virtual key support */
-#define CONFIG_CTS_VIRTUALKEY
+//#define CONFIG_CTS_VIRTUALKEY
 #ifdef CONFIG_CTS_VIRTUALKEY
     #define CFG_CTS_MAX_VKEY_NUM            (4)
     #define CFG_CTS_NUM_VKEY                (3)

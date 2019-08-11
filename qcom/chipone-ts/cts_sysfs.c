@@ -337,6 +337,8 @@ static ssize_t update_firmware_from_file_store(struct device *dev,
     }
 
     cts_info("Update firmware from file '%s'", argv[0]);
+	do_gettimeofday(&start_tv);
+	//cts_info("update start time>>>>>>>>>>>>> %ldS.%4ldms",start_tv.tv_sec,start_tv.tv_usec/1000);
 
     firmware = cts_request_firmware_from_fs(cts_dev, argv[0]);
     if (firmware) {
@@ -357,6 +359,9 @@ static ssize_t update_firmware_from_file_store(struct device *dev,
             cts_err("Start device failed %d", ret);
             return ret;
         }
+		do_gettimeofday(&end_tv);
+		//cts_info("update end time<<<<<<<<<<< %ldS.%4ldms",end_tv.tv_sec,end_tv.tv_usec/1000);
+		cts_info(">>>>>> update usage time = %4ldms <<<<<<",end_tv.tv_sec*1000+end_tv.tv_usec/1000-start_tv.tv_sec*1000-start_tv.tv_usec/1000);
 
         cts_release_firmware(firmware);
     } else {
@@ -416,7 +421,11 @@ static ssize_t fw_version_test_show(struct device *dev,
     int ret;
 
     if (argc != 1) {
-        return sprintf(buf, "Invalid num args %d\n", argc);
+		return sprintf(buf, "Invalid num args %d\n"
+							"\n"
+							"example:\n"
+							"echo 0x1501 > fw_version_test\n"
+							"cat fw_version_test\n", argc);
     }
 
     ret = kstrtou16(argv[0], 0, &version);
@@ -455,7 +464,11 @@ static ssize_t rawdata_test_show(struct device *dev,
     int ret;
 
     if (argc != 2) {
-        return sprintf(buf, "Invalid num args %d\n", argc);
+        return sprintf(buf, "Invalid num args %d\n"
+							"\n"
+							"example:\n"
+							"echo 1800 2200 > rawdata_test\n"
+							"cat rawdata_test\n", argc);
     }
 
     ret = kstrtou16(argv[0], 0, &th_min);
@@ -498,7 +511,11 @@ static ssize_t open_test_show(struct device *dev,
     int ret;
 
     if (argc != 1) {
-        return sprintf(buf, "Invalid num args %d\n", argc);
+		return sprintf(buf, "Invalid num args %d\n"
+							"\n"
+							"example:\n"
+							"echo 800 > open_test\n"
+							"cat open_test\n", argc);
     }
 
     ret = kstrtou16(argv[0], 0, &threshold);
@@ -537,7 +554,11 @@ static ssize_t short_test_show(struct device *dev,
     int ret;
 
     if (argc != 1) {
-        return sprintf(buf, "Invalid num args %d\n", argc);
+		return sprintf(buf, "Invalid num args %d\n"
+							"\n"
+							"example:\n"
+							"echo 500 > short_test\n"
+							"cat short_test\n", argc);
     }
 
     ret = kstrtou16(argv[0], 0, &threshold);
@@ -799,6 +820,8 @@ static ssize_t rawdata_show(struct device *dev,
     if (rawdata == NULL) {
         return sprintf(buf, "Allocate memory for rawdata failed\n");
     }
+	
+	cts_lock_device(cts_dev);
 
     ret = cts_enable_get_rawdata(cts_dev);
     if (ret) {
@@ -878,6 +901,7 @@ static ssize_t rawdata_show(struct device *dev,
     }
 
 err_free_rawdata:
+	cts_unlock_device(cts_dev);
     kfree(rawdata);
 
     return (data_valid ? count : ret);
@@ -907,6 +931,8 @@ static ssize_t diffdata_show(struct device *dev,
         cts_err("Allocate memory for diffdata failed");
         return -ENOMEM;
     }
+
+	cts_lock_device(cts_dev);
 
     ret = cts_enable_get_rawdata(cts_dev);
     if (ret) {
@@ -986,6 +1012,7 @@ static ssize_t diffdata_show(struct device *dev,
     }
 
 err_free_diffdata:
+	cts_unlock_device(cts_dev);
     kfree(diffdata);
 
 	return (data_valid ? count : ret);

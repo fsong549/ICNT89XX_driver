@@ -24,11 +24,6 @@ struct cts_sfctrl {
 
 struct cts_device;
 
-extern ssize_t cts_file_write(struct file *file, const char *buf, size_t count,
-                             loff_t pos);
-extern int cts_file_read(struct file *file, loff_t offset,
-                 char *addr, unsigned long count);
-
 extern struct cts_firmware *cts_request_firmware(
      struct cts_device *cts_dev,u16 hwid, u16 fwid, u16 device_fw_ver);
 extern void cts_release_firmware(const struct cts_firmware *firmware);

@@ -95,8 +95,10 @@ static int cts_i2c_driver_probe(struct i2c_client *client,
     struct chipone_ts_data *cts_data = NULL;
     int ret = 0;
 
-    cts_info("Probe i2c client: name='%s' addr=0x%02x flags=0x%02x irq=%d",
-        client->name, client->addr, client->flags, client->irq);
+	cts_info("Driver for ROCKCHIP platform %s",CFG_CTS_DRIVER_VERSION);
+	
+	cts_info("Probe i2c client: name='%s' addr=0x%02x flags=0x%02x irq=%d",
+			client->name, client->addr, client->flags, client->irq);
 
 #if !defined(CONFIG_MTK_PLATFORM)
     if (client->addr != CTS_NORMAL_MODE_I2CADDR) {
@@ -478,14 +480,14 @@ static struct i2c_driver cts_i2c_driver = {
     .id_table = cts_i2c_device_id_table,
 };
 
-int cts_i2c_driver_init(void)
+static int __init cts_i2c_driver_init(void)
 {
     cts_info("Init");
 
     return i2c_add_driver(&cts_i2c_driver);
 }
 
-void cts_i2c_driver_exit(void)
+static void __exit cts_i2c_driver_exit(void)
 {
     cts_info("Exit");
 

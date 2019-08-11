@@ -53,6 +53,8 @@
 
 extern bool cts_show_debug_log;
 extern struct chipone_ts_data *chipone_ts_data;
+extern struct timeval start_tv;
+extern struct timeval end_tv;
 
 #ifndef LOG_TAG
 #define LOG_TAG         ""
@@ -100,6 +102,10 @@ struct cts_platform_data {
     u8  gesture_keymap[CFG_CTS_NUM_GESTURE][2];
     bool irq_wake_enabled;
 #endif /* CONFIG_CTS_GESTURE */
+
+#ifdef CFG_CTS_FORCE_UP
+	struct timer_list touch_event_timeout_timer;
+#endif
 
 #ifdef TPD_SUPPORT_I2C_DMA
     u8 *i2c_dma_buff_va;

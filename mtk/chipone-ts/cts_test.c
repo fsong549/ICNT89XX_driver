@@ -27,6 +27,7 @@ int cts_test_save_log(struct cts_device *cts_dev, const char *filepath, char *bu
     //u32 size;
     u32 len;
     int ret;
+	loff_t	pos = 0;
 
 #ifndef SUPPORT_SAVE_TEST_LOG
     cts_info("Unsupport save log file");
@@ -46,7 +47,13 @@ int cts_test_save_log(struct cts_device *cts_dev, const char *filepath, char *bu
 
     len =strlen(buf);
     cts_info("write to file %s size: %d", filepath, len);
-    ret = cts_file_write(file, buf, len, 0);
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,14,0)
+	ret = kernel_write(file, buf, len, &pos);
+#else
+	ret = kernel_write(file, buf, len, pos);
+#endif
+	
     if(ret != len){
         cts_err("kernel write %s fail %d",filepath,ret);
     }
@@ -912,7 +919,7 @@ int cts_rawdata_process(struct cts_device *cts_dev,  char *buf,
 #define RAWDATA_BUFFER_SIZE(cts_dev) \
     (cts_dev->fwdata.rows * cts_dev->fwdata.cols * 2)
     
-    s16 *rawdata = NULL;
+    u16 *rawdata = NULL;
     //u8 row_index[128]={0};
     //u8 col_index[128]={0};
 
@@ -920,7 +927,7 @@ int cts_rawdata_process(struct cts_device *cts_dev,  char *buf,
 
     cts_info("cts rawdata process");
 
-    rawdata = (s16 *)kmalloc(RAWDATA_BUFFER_SIZE(cts_dev), GFP_KERNEL);
+    rawdata = (u16 *)kmalloc(RAWDATA_BUFFER_SIZE(cts_dev), GFP_KERNEL);
     if (rawdata == NULL) {
         cts_err("Allocate memory for rawdata failed");
         return -ENOMEM;
@@ -1037,7 +1044,7 @@ int cts_fw_version_test( struct cts_device * cts_dev, u16 fw_ver)
     
     cts_info("cts firmware version test");
     
-    cts_info("request log memery size: %lu", PAGE_SIZE);
+    cts_info("request log memery size: %ld", PAGE_SIZE);
     buf = (char*)kzalloc(PAGE_SIZE, GFP_KERNEL);
     if(buf == NULL){
         cts_err("allocate memery for firmware version test log fail");
@@ -1090,7 +1097,7 @@ int cts_short_test(struct cts_device *cts_dev, u16 threshold)
         return -ENOMEM;
     }
     
-    cts_info("request short test log memery size: %lu", PAGE_SIZE);
+    cts_info("request short test log memery size: %ld", PAGE_SIZE);
     buf = (char*)kzalloc(PAGE_SIZE, GFP_KERNEL);
     if(buf == NULL){
         cts_err("allocate memery for short test log fail");
@@ -1163,7 +1170,7 @@ int cts_rawdata_test(struct cts_device *cts_dev, u16 th_min, u16 th_max)
     
     cts_info("cts rawdata test");
 
-    cts_info("request rawdata test log memery size: %lu", PAGE_SIZE);
+    cts_info("request rawdata test log memery size: %ld", PAGE_SIZE);
     buf = (char*)kzalloc(PAGE_SIZE, GFP_KERNEL);
     if(buf == NULL){
         cts_err("allocate memery for rawdata test log fail");
@@ -1202,7 +1209,7 @@ int cts_open_test(struct cts_device *cts_dev, u16 th)
     
     cts_info("cts open test");
     
-    cts_info("request log memery size: %lu", PAGE_SIZE);
+    cts_info("request log memery size: %ld", PAGE_SIZE);
     buf = (char*)kzalloc(PAGE_SIZE, GFP_KERNEL);
     if(buf == NULL){
         cts_err("allocate memery for open test log fail");
@@ -1247,7 +1254,8 @@ int cts_test(struct cts_device *cts_dev, const char *filepath)
     char *pass = CTS_TEST_PASS;
     char *fail = CTS_TEST_FAIL;
     char *buf = NULL;
-
+	loff_t pos = 0;
+	
     cts_info("Cts test");
     
     cts_stop_device(cts_dev);
@@ -1277,7 +1285,12 @@ int cts_test(struct cts_device *cts_dev, const char *filepath)
             goto cts_cfg_file_err;
         }
 
-        if(cts_file_read(file, 0, test_config, size) < 0){
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,14,0)
+		ret = kernel_read(file, test_config, size, &pos);
+#else
+		ret = kernel_read(file, pos, test_config, size);
+#endif
+		if(ret < 0){
             cts_err("Read test config file error");
             goto cts_cfg_file_err;
         }

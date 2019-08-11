@@ -11,6 +11,8 @@
 /** Whether reset pin is used */
 #define CFG_CTS_HAS_RESET_PIN
 
+#define CFG_CTS_FORCE_UP
+
 /** Whether force download firmware to chip */
 //#define CFG_CTS_FIRMWARE_FORCE_UPDATE
 

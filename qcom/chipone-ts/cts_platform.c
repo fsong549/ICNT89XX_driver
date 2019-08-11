@@ -168,6 +168,15 @@ static void cts_plat_touch_dev_irq_work(struct work_struct *work)
 }
 #endif /* CONFIG_GENERIC_HARDIRQS */
 
+#ifdef CFG_CTS_FORCE_UP
+static void cts_plat_touch_event_timeout(unsigned long arg)
+{
+    cts_warn("Touch event timeout");
+
+    cts_plat_release_all_touch((struct cts_platform_data *)arg);
+}
+#endif
+
 #ifdef CONFIG_CTS_OF
 static int cts_plat_parse_dt(struct cts_platform_data *pdata,
         struct device_node *dev_node)
@@ -310,6 +319,11 @@ int cts_init_platform_data(struct cts_platform_data *pdata,
         pdata->gesture_num = CFG_CTS_NUM_GESTURE;
     }
 #endif /* CONFIG_CTS_GESTURE */
+
+#ifdef CFG_CTS_FORCE_UP
+	setup_timer(&pdata->touch_event_timeout_timer, 
+	cts_plat_touch_event_timeout, (unsigned long)pdata);
+#endif
 
     return 0;
 }
@@ -589,6 +603,14 @@ int cts_plat_process_touch_msg(struct cts_platform_data *pdata,
 
     input_mt_sync_frame(input_dev);
     input_sync(input_dev);
+	
+#ifdef CFG_CTS_FORCE_UP
+	if (contact) {
+		mod_timer(&pdata->touch_event_timeout_timer, jiffies + msecs_to_jiffies(100));
+	} else {
+		del_timer(&pdata->touch_event_timeout_timer);
+	}
+#endif
 
     return 0;
 }
@@ -597,23 +619,29 @@ int cts_plat_release_all_touch(struct cts_platform_data *pdata)
 {
     struct input_dev *input_dev = pdata->ts_input_dev;
 
-#if !defined(CONFIG_CTS_SLOTPROTOCOL)
+#if defined(CONFIG_CTS_SLOTPROTOCOL)
     int id;
 #endif /* CONFIG_CTS_SLOTPROTOCOL */
 
     cts_info("Release all touch");
 
 #ifdef CONFIG_CTS_SLOTPROTOCOL
+	for (id = 0; id < CFG_CTS_MAX_TOUCH_NUM; id++) {
+		input_mt_slot(input_dev, id);
+		input_mt_report_slot_state(input_dev, MT_TOOL_FINGER, false);
+		input_mt_sync(input_dev);
+	}
     input_mt_sync_frame(input_dev);
 #else /* CONFIG_CTS_SLOTPROTOCOL */
-    for (id = 0; id < CFG_CTS_MAX_TOUCH_NUM; id++) {
-        input_report_key(input_dev, BTN_TOUCH, 0);
-        input_report_abs(input_dev, ABS_MT_PRESSURE, 0);
-        input_mt_sync(input_dev);
-    }
+	input_report_key(input_dev, BTN_TOUCH, 0);
+	input_mt_sync(input_dev);
 #endif /* CONFIG_CTS_SLOTPROTOCOL */
 
     input_sync(input_dev);
+
+#ifdef CFG_CTS_FORCE_UP
+	del_timer(&pdata->touch_event_timeout_timer);
+#endif
 
     return 0;
 }

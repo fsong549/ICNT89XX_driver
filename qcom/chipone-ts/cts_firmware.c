@@ -12,7 +12,7 @@
 
 #ifdef CFG_CTS_DRIVER_BUILTIN_FIRMWARE
 #include "icnt89xx_fw.h"
-//#include "icnt88xx_fw.h"
+#include "icnt88xx_fw.h"
 #include "icnt87xx_fw.h"
 #include "icnt86xx_fw.h"
 #include "icnt85xx_fw.h"
@@ -26,7 +26,7 @@ struct cts_firmware cts_driver_builtin_firmwares[] = {
         .fwid = CTS_FWID_ICNT89XX,
         .data = icnt89xx_driver_builtin_firmware,
         .size = ARRAY_SIZE(icnt89xx_driver_builtin_firmware),
-        .ver_offset = 0x114
+        .ver_offset = 0x114 //maybe = 0x100
     },
     {
         .name = "ICNT86xx",      /* MUST set non-NULL */
@@ -34,6 +34,14 @@ struct cts_firmware cts_driver_builtin_firmwares[] = {
         .fwid = CTS_FWID_ICNT86XX,
         .data = icnt86xx_driver_builtin_firmware,
         .size = ARRAY_SIZE(icnt86xx_driver_builtin_firmware),
+        .ver_offset = 0x100
+    },
+    {
+        .name = "ICNT88xx",      /* MUST set non-NULL */
+        .hwid = CTS_HWID_ICNT88XX,
+        .fwid = CTS_FWID_ICNT88XX,
+        .data = icnt88xx_driver_builtin_firmware,
+        .size = ARRAY_SIZE(icnt88xx_driver_builtin_firmware),
         .ver_offset = 0x100
     },
     {
@@ -237,36 +245,7 @@ struct cts_firmware cts_driver_builtin_firmwares[] = {
 #define FIRMWARE_VERSION(firmware, offset)  \
     get_unaligned_le16((firmware)->data + offset)
 
-ssize_t cts_file_write(struct file *file, const char *buf, size_t count,
-                             loff_t pos)
-{
-    mm_segment_t old_fs;
-    ssize_t res;
-
-    old_fs = get_fs();
-    set_fs(get_ds());
-    /* The cast to a user pointer is valid due to the set_fs() */
-    res = vfs_write(file, (__force const char __user *)buf, count, &pos     );
-    set_fs(old_fs);
-
-    return res;
-}
-
-int cts_file_read(struct file *file, loff_t offset,
-                 char *addr, unsigned long count)
-{
-    mm_segment_t old_fs;
-    loff_t pos = offset;
-    int result;
-
-    old_fs = get_fs();
-    set_fs(get_ds());
-    /* The cast to a user pointer is valid due to the set_fs() */
-    result = vfs_read(file, (void __user *)addr, count, &pos);
-    set_fs(old_fs);
-    return result;
-}
-
+#if defined(CFG_CTS_DRIVER_BUILTIN_FIRMWARE) || defined(CFG_CTS_FIRMWARE_IN_FS)
 static bool is_firmware_size_valid(const struct cts_firmware *firmware)
 {
     return (firmware->size > 0x102 &&
@@ -280,6 +259,7 @@ static bool is_firmware_valid(const struct cts_firmware *firmware)
     }
     return false;
 }
+#endif
 
 #ifdef SUPPORT_SENSOR_ID
 
@@ -316,15 +296,230 @@ int cts_compare_sensor_id_from_bultin(const struct cts_device *cts_dev,
 }
 #endif
 
+#define CTS_DEV_HW_MAX_GPIO_NUM             (8)
+ 
+enum CTS_DEV_GPIO_STATUS {
+    CTS_DEV_GPIO_PULL_DOWN = 0,
+    CTS_DEV_GPIO_PULL_UP = 1,
+    CTS_DEV_GPIO_FLOATING = 2,
+};
+ 
+static int cts_dev_hw_reg_set_bit(struct cts_device *cts_dev, u32 reg, int nr)
+{
+	int ret; 
+	u8 val;
+	
+    ret = cts_hw_reg_readb(cts_dev, reg, &val);
+    if (ret) {
+       cts_err("set bit hw reg %d failed\n",reg);
+       return ret;
+    }
+   
+    val |= 1u << nr;
+    ret = cts_hw_reg_writeb(cts_dev, reg, val);
+    if (ret) {
+       cts_err("set bit hw write reg %d val %d failed\n",reg,val);
+       return ret;
+    }
+   
+    return 0;
+}
+ 
+static int cts_dev_hw_reg_clr_bit(struct cts_device *cts_dev, u32 reg, int nr)
+{
+	int ret;
+	u8 val;
+	
+    ret = cts_hw_reg_readb(cts_dev, reg, &val);
+    if (ret) {
+       cts_err("clr bit hw reg %d failed\n",reg);
+       return ret;
+    }
+   
+    val &= ~(1u << nr);
+    ret = cts_hw_reg_writeb(cts_dev, reg, val);
+    if (ret) {
+       cts_err("clr bit hw write reg %d val %d failed\n",reg,val);
+       return ret;
+    }
+   
+    return 0;
+}
+ 
+static int cts_dev_set_gpio_direction(struct cts_device *cts_dev, int gpio, bool output)
+{
+    int ret;
+   
+    cts_info("Set GPIO%u direction: %s", gpio, output ? "OUTPUT" : "INPUT");
+ 
+    if (output) {
+    	ret = cts_dev_hw_reg_set_bit(cts_dev, CTS_DEVICE_HW_REG_GPIO_DIR, gpio);
+    } else {
+    	ret = cts_dev_hw_reg_clr_bit(cts_dev, CTS_DEVICE_HW_REG_GPIO_DIR, gpio);
+    }
+    if (ret) {
+       cts_err("set gpio direction failed\n");
+       return ret;
+    }
+   
+    return 0;
+}
+ 
+static int cts_dev_set_gpio_pullup(struct cts_device *cts_dev, int gpio)
+{
+    int ret;
+    cts_info("Set GPIO%u pull up", gpio);
+ 
+    ret = cts_dev_hw_reg_set_bit(cts_dev, CTS_DEVICE_HW_REG_GPIO_PULL_UP, gpio);
+    if (ret) {
+       cts_err("set gpio pullup,set bit failed\n");
+       return ret;
+    }
+    ret = cts_dev_hw_reg_clr_bit(cts_dev, CTS_DEVICE_HW_REG_GPIO_PULL_DOWN, gpio);
+    if (ret) {
+       cts_err("set gpio pullup,clr bit failed\n");
+       return ret;
+    }
+    return 0;
+}
+ 
+static int cts_dev_set_gpio_pulldown(struct cts_device *cts_dev, int gpio)
+{
+	int ret;
+	
+    cts_info("Set GPIO%u pull down", gpio);
+    ret = cts_dev_hw_reg_clr_bit(cts_dev, CTS_DEVICE_HW_REG_GPIO_PULL_UP, gpio);
+    if (ret) {
+       cts_err("set gpio pulldown,clr bit failed\n");
+       return ret;
+    }
+    ret = cts_dev_hw_reg_set_bit(cts_dev, CTS_DEVICE_HW_REG_GPIO_PULL_DOWN, gpio);
+    if (ret) {
+       cts_err("set gpio pulldown,set bit failed\n");
+       return ret;
+    }
+    return 0;
+}
+ 
+static int cts_dev_get_gpio_value(struct cts_device *cts_dev, int gpio, bool *val)
+{
+    u8 v;
+	int ret;
+ 
+    ret = cts_hw_reg_readb(cts_dev, CTS_DEVICE_HW_REG_GPIO_GET_VAL, &v);
+    if (ret) {
+       cts_err("get gpio value hw reg failed\n");
+       return ret;
+    }
+   
+    *val = v & (1u << gpio) ? true : false;
+   
+    return 0;
+}
+ 
+static int cts_dev_get_gpio_status(struct cts_device *cts_dev, int gpio, u8 *status)
+{
+    int ret;
+    bool val;
+ 
+    cts_info("Get GPIO%u status");
+   
+    if (gpio < 0 || gpio > CTS_DEV_HW_MAX_GPIO_NUM) {
+       cts_err("get gpio status gpio invalid\n");
+       return -EINVAL;
+    }
+ 
+    ret = cts_dev_hw_reg_clr_bit(cts_dev, CTS_DEVICE_HW_REG_PINMUX, gpio);
+    if (ret) {
+       cts_err("get gpio status,he reg clr bit failed\n");
+       return ret;
+    }
+    ret = cts_dev_set_gpio_direction(cts_dev, gpio, false);
+    if (ret) {
+       cts_err("get gpio status,set gpio direction failed\n");
+       return ret;
+    }
+ 
+    ret = cts_dev_set_gpio_pullup(cts_dev, gpio);
+    if (ret) {
+       cts_err("get gpio status,set gpio pullup failed\n");
+       return ret;
+    }
+    udelay(100);
+ 
+    ret = cts_dev_get_gpio_value(cts_dev, gpio, &val);
+    if (ret) {
+       cts_err("get gpio status,get gpio value failed\n");
+       return ret;
+    }
+    if (val) {
+       ret = cts_dev_set_gpio_pulldown(cts_dev, gpio);
+       if (ret) {
+           cts_err("get gpio status,set gpio pulldown failed\n");
+           return ret;
+       }
+       udelay(100);
+ 
+       cts_dev_get_gpio_value(cts_dev, gpio, &val);
+       if (ret) {
+           cts_err("get gpio status,get gpio value failed\n");
+           return ret;
+       }
+       if (val) {
+           *status = CTS_DEV_GPIO_PULL_UP;
+       } else {
+           *status = CTS_DEV_GPIO_FLOATING;
+       }
+    } else {
+       *status = CTS_DEV_GPIO_PULL_DOWN;
+    }
+   
+    return 0;
+}
+ 
+int cts_dev_get_sensor_id(struct cts_device *cts_dev, u8 *sensor_id)
+{
+    int ret;
+    u8  id1, id2;
+   
+    ret = cts_dev_get_gpio_status(cts_dev, 2, &id1);
+    if (ret) {
+       cts_err("get gpio status id1 failed\n");
+       return ret;
+    }
+   
+    ret = cts_dev_get_gpio_status(cts_dev, 3, &id2);
+    if (ret) {
+       cts_err("get gpio status id2 failed\n");
+       return ret;
+    }
+   
+    *sensor_id = (id2 << 4) | id1;
+    return 0;
+}
+
 #ifdef CFG_CTS_FIRMWARE_IN_FS
 int cts_compare_sensor_id_from_fs(struct cts_device *cts_dev, 
         struct cts_firmware *firmware)
 {
     int i,j;
+	int ret;
+	int retry=0;
+
+	cts_info("%s", __func__);
+	if(cts_dev->rtdata.is_chip_empty){
+		for (retry = 0; retry < 3; retry++) {
+			ret = cts_dev_get_sensor_id(cts_dev, &cts_dev->confdata.hw_sensor_id);
+			if (ret == 0) {
+				cts_info("Get hw sensor id: 0x%02x", cts_dev->confdata.hw_sensor_id);
+				break;
+			}
+		}	
+	}
 
     for (i = 0; i < ARRAY_SIZE(sensor_id_bin_table); i++) {
         if ((strcmp(firmware->name, sensor_id_bin_table[i].name) == 0)) {
-            if(cts_dev->rtdata.is_chip_empty){
+            if(cts_dev->rtdata.is_chip_empty && retry >= 3){
                 cts_dev->confdata.fw_name_index = i;
                 cts_dev->confdata.fw_sensor_id_index = MAX_SUPPORT_ID_NUM;
                 cts_info("Chip %s is empty return default firmware in fs: chip_index:%d id:0x%02x id_index: %d", 
@@ -455,7 +650,7 @@ const struct cts_firmware *cts_request_driver_builtin_firmware_by_index(
                  "hwid: %04x fwid: %04x size: %zu INVALID",
             firmware->name, firmware->hwid, firmware->hwid, firmware->size);
     } else {
-        cts_warn("Request driver builtin by chip_index %u too large >= %u"
+        cts_warn("Request driver builtin by chip_index %u too large >= %ld"
             "or fw_index %u too large >= %d",
             chip_index, NUM_DRIVER_BUILTIN_FIRMWARE,
             fw_index,cts_get_fw_num_driver_builtin());
@@ -588,6 +783,7 @@ struct cts_firmware *cts_request_newer_firmware_from_fs(
     int ret, read_size;
     u8 buff[2];
     u16 version;
+	loff_t pos = 0; 
 
     cts_info("Request from file '%s' if version > %04x",
         filepath, curr_version);
@@ -615,10 +811,16 @@ struct cts_firmware *cts_request_newer_firmware_from_fs(
         goto err_close_file;
     }
 
-    if (cts_file_read(file, firmware->ver_offset, buff, 2) < 0) {
-        cts_err("Read version from offset 0x100 failed");
-        goto err_close_file;
-    }
+	pos = FIRMWARE_VERSION_OFFSET;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,14,0)
+	read_size = kernel_read(file, buff, 2, &pos);
+#else
+	read_size = kernel_read(file, pos, buff, 2);
+#endif
+	if (read_size < 0) {
+		cts_err("Read version from offset 0x100 failed");
+		goto err_close_file;
+	}
     version = get_unaligned_le16(buff);
 
 #ifdef SUPPORT_SENSOR_ID
@@ -645,12 +847,17 @@ struct cts_firmware *cts_request_newer_firmware_from_fs(
         cts_err("Request form fs alloc firmware data failed");
         goto err_close_file;
     }
-
-    read_size = cts_file_read(file, 0, firmware->data, firmware->size);
-    if (read_size < 0 || read_size != firmware->size) {
-        cts_err("Request from fs read whole file failed %d", read_size);
-        goto err_free_firmware_data;
-    }
+	
+	pos = 0;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,14,0)
+	read_size = kernel_read(file, firmware->data, firmware->size, &pos);
+#else
+	read_size = kernel_read(file, pos, firmware->data, firmware->size);
+#endif
+	if (read_size < 0 || read_size != firmware->size) {
+		cts_err("Request from fs read whole file failed %d", read_size);
+		goto err_free_firmware_data;
+	}
 
     ret = filp_close(file, NULL);
     if (ret) {
@@ -835,7 +1042,7 @@ retry_upgrade:
 
 
     }else if((strcmp(firmware->name, "ICNT85xx") == 0)
-    ||(strcmp(firmware->name, "ICNT86xx") == 0)){
+    ||(strcmp(firmware->name, "ICNT86xx") == 0)||(strcmp(firmware->name, "ICNT88xx") == 0)){
         ret = icnt85xx_fw_update(cts_dev, firmware, to_flash);
         if (ret) {
             cts_err("Update firmware failed %d ",ret);
